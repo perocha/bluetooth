@@ -62,6 +62,14 @@ impl BluetoothManager {
             Ok(())
         }).await
     }
+
+    pub async fn print_all_characteristics(&self, device_id: u32, storage: &DeviceStorage) -> Result<(), Box<dyn std::error::Error>> {
+        self.with_device(device_id, storage, |device| async move {
+            info!("Printing all characteristics...");
+            device.print_all_characteristics().await?;
+            Ok(())
+        }).await
+    }
     
     /// Helper method to reduce code duplication when working with devices.
     async fn with_device<F, Fut>(

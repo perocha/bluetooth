@@ -61,6 +61,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             6 => {
+                let device_id = ui.get_device_id();
+                info!("Get all data from MJ_HT_V1 sensor with device ID: {}", device_id);
+                if let Err(e) = bluetooth_manager.print_all_characteristics(device_id, &device_storage).await {
+                    error!("Failed to retrieve all data: {}", e);
+                } else {
+                    info!("Successfully retrieved all data.");
+                }
+            }
+            7 => {
                 info!("User selected exit. Terminating the application...");
                 break;
             }

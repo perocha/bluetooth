@@ -243,4 +243,58 @@ impl BluetoothDevice {
         let raw_value = i16::from_le_bytes([value[2], value[3]]); // Assuming humidity is in the next two bytes
         raw_value as f32 / 100.0
     }
+
+    pub async fn print_all_characteristics(&self) -> Result<(), Box<dyn std::error::Error>> {
+        self.connect().await?;
+
+        // Force service discovery
+        if let Err(e) = self.peripheral.discover_services().await {
+            warn!("Failed to discover services: {:?}", e);
+            return Err(Box::new(e));
+        }
+
+        // Define the characteristics we are aware of
+        let characteristics = vec![
+            ("Device Name", "00001800-0000-1000-8000-00805f9b34fb", "00002a00-0000-1000-8000-00805f9b34fb"),
+            ("Appearance", "00001800-0000-1000-8000-00805f9b34fb", "00002a01-0000-1000-8000-00805f9b34fb"),
+            ("Peripheral Preferred Connection Parameters", "00001800-0000-1000-8000-00805f9b34fb", "00002a04-0000-1000-8000-00805f9b34fb"),
+            ("Firmware Version", "0000180a-0000-1000-8000-00805f9b34fb", "00002a26-0000-1000-8000-00805f9b34fb"),
+            ("Manufacturer Name", "0000180a-0000-1000-8000-00805f9b34fb", "00002a29-0000-1000-8000-00805f9b34fb"),
+            ("Battery Level", "0000180f-0000-1000-8000-00805f9b34fb", "00002a19-0000-1000-8000-00805f9b34fb"),
+            ("Custom Service Temperature", "226c0000-6476-4566-7562-66734470666d", "226caa55-6476-4566-7562-66734470666d"),
+            ("Custom Service Humidity", "226c0000-6476-4566-7562-66734470666d", "226cbb55-6476-4566-7562-66734470666d"),
+        ];
+
+        for (name, service_uuid, characteristic_uuid) in characteristics {
+            match self.read_characteristic(service_uuid, characteristic_uuid).await {
+                Ok(value) => {
+                    let output = match name {
+                        "Device Name" | "Firmware Version" | "Manufacturer Name" => {
+                            String::from_utf8_lossy(&value).to_string()
+                        }
+                        "Appearance" | "Peripheral Preferred Connection Parameters" => {
+                            format!("{:?}", value)
+                        }
+                        "Battery Level" => {
+                            format!("{}%", value[0])
+                        }
+                        "Custom Service Temperature" => {
+                            format!("{:.2}°C", Self::parse_temperature(&value))
+                        }
+                        "Custom Service Humidity" => {
+                            format!("{:.2}%", Self::parse_humidity(&value))
+                        }
+                        _ => format!("{:?}", value),
+                    };
+                    println!("{}: {}", name, output);
+                }
+                Err(e) => {
+                    println!("Failed to read {}: {:?}", name, e);
+                }
+            }
+        }
+
+        self.disconnect().await?;
+        Ok(())
+    }
 }

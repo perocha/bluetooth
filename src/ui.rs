@@ -13,7 +13,8 @@ impl UserInterface {
         println!("3. Retrieve config info");
         println!("4. Retrieve detailed info");
         println!("5. Retrieve temperature and humidity data");
-        println!("6. Exit");
+        println!("6. Retrieve all data");
+        println!("7. Exit");
     }
 
     pub fn get_user_choice(&self) -> u8 {
