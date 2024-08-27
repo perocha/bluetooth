@@ -1,54 +1,56 @@
 mod bluetooth_manager;
-mod bluetooth_device;
-
-use env_logger;
-use std::error::Error;
-use std::io::{self, Write};
-use tokio::runtime::Runtime;
+mod device_storage;
+mod ui;
+mod device_info;
 
 use bluetooth_manager::BluetoothManager;
-use bluetooth_device::BluetoothDevice;
+use device_storage::DeviceStorage;
+use ui::UserInterface;
+use log::{info, debug};  // Import the logging macros
 
-fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::init(); // Initialize the logger
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();  // Initialize the logger
 
-    let rt = Runtime::new()?;
-    rt.block_on(async {
-        let manager = BluetoothManager::new().await?;
+    // Initialize Bluetooth Manager, Device Storage, and UI
+    info!("Initializing Bluetooth Manager, Device Storage, and UI...");
+    let bluetooth_manager = BluetoothManager::new().await?;
+    let mut device_storage = DeviceStorage::new();
+    let ui = UserInterface::new();
 
-        let devices = manager.scan_for_devices().await?;
-        if devices.is_empty() {
-            println!("No devices found.");
-            return Ok(());
+    info!("Starting the main application loop...");
+    // Main application loop
+    loop {
+        ui.display_menu();
+        let choice = ui.get_user_choice();
+        debug!("User selected menu option: {}", choice);
+
+        match choice {
+            1 => {
+                let attempts = ui.get_scan_attempts();
+                info!("User requested a scan with {} attempt(s)", attempts);
+                bluetooth_manager.scan(&mut device_storage, attempts).await?;
+            }
+            2 => {
+                info!("User requested to list devices");
+                ui.display_devices(&device_storage);
+            }
+            3 => {
+                let device_id = ui.get_device_id();
+                info!("User requested to retrieve information for device ID: {}", device_id);
+                bluetooth_manager.retrieve_device_info(device_id, &device_storage).await?;
+            }
+            4 => {
+                info!("User selected exit. Terminating the application...");
+                break;
+            }
+            _ => {
+                debug!("User selected an invalid option.");
+                println!("Invalid option. Please try again.");
+            }
         }
-
-        println!("Found devices:");
-        for (i, device) in devices.iter().enumerate() {
-            println!("{}: {} - Address: {}, Signal Strength: {} dBm", 
-                i + 1, 
-                device.name, 
-                device.address, 
-                device.signal_strength.map_or("N/A".to_string(), |rssi| rssi.to_string()));
-        }
-
-
-        let selected_device = get_user_selection(&devices)?;
-        manager.pair_with_device(selected_device).await?;
-        Ok(())
-    })
-}
-
-fn get_user_selection(devices: &[BluetoothDevice]) -> Result<&BluetoothDevice, Box<dyn Error>> {
-    print!("Select a device to pair with (number): ");
-    io::stdout().flush()?;
-
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-
-    let selection: usize = input.trim().parse()?;
-    if selection == 0 || selection > devices.len() {
-        return Err("Invalid selection".into());
     }
 
-    Ok(&devices[selection - 1])
+    info!("Application has exited.");
+    Ok(())
 }
