@@ -63,10 +63,10 @@ impl BluetoothManager {
         }).await
     }
 
-    pub async fn print_all_characteristics(&self, device_id: u32, storage: &DeviceStorage) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn read_mj_ht_v1_information(&self, device_id: u32, storage: &DeviceStorage) -> Result<(), Box<dyn std::error::Error>> {
         self.with_device(device_id, storage, |device| async move {
-            info!("Printing all characteristics...");
-            device.print_all_characteristics().await?;
+            info!("Printing all MJ_HT_V1 characteristics...");
+            device.read_mj_ht_v1_information().await?;
             Ok(())
         }).await
     }

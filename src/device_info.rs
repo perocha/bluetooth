@@ -244,7 +244,7 @@ impl BluetoothDevice {
         raw_value as f32 / 100.0
     }
 
-    pub async fn print_all_characteristics(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn read_mj_ht_v1_information(&self) -> Result<(), Box<dyn std::error::Error>> {
         self.connect().await?;
 
         // Force service discovery
