@@ -1,9 +1,10 @@
-use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
+use btleplug::api::{Central, Manager as _, Peripheral as PeripheralTrait}; // Import PeripheralTrait
 use btleplug::platform::Adapter;
 use std::error::Error;
+use std::sync::Arc;
 use crate::device_storage::DeviceStorage;
 use crate::device_info::BluetoothDevice;
-use log::{info, debug}; // Import the logging macros
+use log::{info, debug};
 
 pub struct BluetoothManager {
     adapter: Adapter,
@@ -23,7 +24,7 @@ impl BluetoothManager {
         info!("Starting scan with {} attempt(s)...", attempts);
         for attempt in 1..=attempts {
             info!("Scan attempt {}/{}", attempt, attempts);
-            self.adapter.start_scan(ScanFilter::default()).await?;
+            self.adapter.start_scan(btleplug::api::ScanFilter::default()).await?;
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             let peripherals = self.adapter.peripherals().await?;
 
@@ -35,7 +36,8 @@ impl BluetoothManager {
 
                 debug!("Device found: MAC={}, Name={}, RSSI={}", mac_address, name, rssi);
 
-                let device = BluetoothDevice::new(mac_address, name, rssi);
+                // Add the device with its peripheral to the storage
+                let device = BluetoothDevice::new(mac_address, name, rssi, Arc::new(peripheral));
                 storage.add_or_update_device(device);
             }
         }
@@ -48,7 +50,7 @@ impl BluetoothManager {
         info!("Retrieving information for device with ID: {}", device_id);
         if let Some(device) = storage.get_device(device_id) {
             info!("Device found: {:?}", device);
-            device.retrieve_additional_info().await; // This could involve connecting and printing more details
+            device.retrieve_additional_info().await;
         } else {
             info!("Device with ID {} not found.", device_id);
         }

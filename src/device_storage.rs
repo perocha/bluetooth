@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::device_info::BluetoothDevice;
-use log::{info, debug}; // Import the logging macros
+use log::debug;
 
 pub struct DeviceStorage {
     devices: HashMap<u32, BluetoothDevice>,
@@ -9,7 +9,6 @@ pub struct DeviceStorage {
 
 impl DeviceStorage {
     pub fn new() -> Self {
-        debug!("Initializing new DeviceStorage.");
         DeviceStorage {
             devices: HashMap::new(),
             next_id: 1,
@@ -17,27 +16,31 @@ impl DeviceStorage {
     }
 
     pub fn add_or_update_device(&mut self, device: BluetoothDevice) {
-        for (id, existing_device) in self.devices.iter_mut() {
-            if existing_device.mac_address == device.mac_address {
-                info!("Updating existing device with ID: {} | MAC: {}", id, existing_device.mac_address);
-                existing_device.name = device.name;
-                existing_device.rssi = device.rssi;
-                return;
-            }
-        }
+        debug!("Adding or updating device with MAC: {}", device.mac_address);
 
-        info!("Adding new device with MAC: {}", device.mac_address);
-        self.devices.insert(self.next_id, device);
-        self.next_id += 1;
+        // Check if the device with the same MAC address already exists
+        if let Some((_id, existing_device)) = self.devices.iter_mut()
+                                                         .find(|(_, d)| d.mac_address == device.mac_address) {
+            // Update the existing device's information
+            debug!("Updating existing device with MAC: {}", device.mac_address);
+            existing_device.name = device.name;
+            existing_device.rssi = device.rssi;
+            existing_device.peripheral = device.peripheral.clone(); // Ensure peripheral is updated
+        } else {
+            // Add new device with a new internal ID
+            debug!("Adding new device with MAC: {} as ID: {}", device.mac_address, self.next_id);
+            self.devices.insert(self.next_id, device);
+            self.next_id += 1;
+        }
     }
 
     pub fn get_device(&self, id: u32) -> Option<&BluetoothDevice> {
-        debug!("Fetching device with ID: {}", id);
+        debug!("Retrieving device with ID: {}", id);
         self.devices.get(&id)
     }
 
     pub fn list_devices(&self) -> Vec<&BluetoothDevice> {
-        debug!("Listing all devices. Total count: {}", self.devices.len());
+        debug!("Listing all devices...");
         self.devices.values().collect()
     }
 }
