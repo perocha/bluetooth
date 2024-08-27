@@ -10,8 +10,9 @@ impl UserInterface {
     pub fn display_menu(&self) {
         println!("1. Scan");
         println!("2. List Devices");
-        println!("3. Retrieve Information");
-        println!("4. Exit");
+        println!("3. Retrieve config info");
+        println!("4. Retrieve detailed info");
+        println!("5. Exit");
     }
 
     pub fn get_user_choice(&self) -> u8 {
@@ -28,9 +29,8 @@ impl UserInterface {
     }
 
     pub fn display_devices(&self, storage: &DeviceStorage) {
-        let devices = storage.list_devices();
-        for (i, device) in devices.iter().enumerate() {
-            println!("ID: {}, MAC: {}, Name: {}, RSSI: {}", i + 1, device.mac_address, device.name, device.rssi);
+        for (id, device) in storage.list_devices() {
+            println!("ID: {}, MAC: {}, Name: {}, RSSI: {}", id, device.mac_address, device.name, device.rssi);
         }
     }
 

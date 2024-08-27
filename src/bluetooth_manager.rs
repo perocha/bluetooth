@@ -57,4 +57,17 @@ impl BluetoothManager {
 
         Ok(())
     }
+
+    pub async fn list_available_info(&self, device_id: u32, storage: &DeviceStorage) -> Result<(), Box<dyn Error>> {
+        info!("Retrieving available information for device with ID: {}", device_id);
+        if let Some(device) = storage.get_device(device_id) {
+            info!("Device found: {:?}", device);
+            device.list_available_info().await?;
+        } else {
+            info!("Device with ID {} not found.", device_id);
+        }
+
+        Ok(())
+    }
+
 }

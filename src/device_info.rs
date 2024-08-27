@@ -22,6 +22,43 @@ impl BluetoothDevice {
         }
     }
 
+    pub async fn list_available_info(&self) -> Result<(), Box<dyn std::error::Error>> {
+        info!("Connecting to device with MAC={}", self.mac_address);
+
+        // Connect to the peripheral
+        if let Err(e) = self.peripheral.connect().await {
+            warn!("Failed to connect to device {}: {:?}", self.mac_address, e);
+            return Err(Box::new(e));
+        }
+
+        info!("Connected to device with MAC={}", self.mac_address);
+
+        // Discover services
+        if let Err(e) = self.peripheral.discover_services().await {
+            warn!("Failed to discover services on device {}: {:?}", self.mac_address, e);
+            return Err(Box::new(e));
+        }
+
+        // Iterate through available services and list them
+        for service in self.peripheral.services() {
+            info!("Service UUID: {:?}", service.uuid);
+
+            // List characteristics of each service
+            for characteristic in &service.characteristics {
+                info!("Characteristic UUID: {:?}, Properties: {:?}", characteristic.uuid, characteristic.properties);
+            }
+        }
+
+        // Disconnect from the device when done
+        if let Err(e) = self.peripheral.disconnect().await {
+            warn!("Failed to disconnect from device {}: {:?}", self.mac_address, e);
+        } else {
+            info!("Disconnected from device with MAC={}", self.mac_address);
+        }
+
+        Ok(())
+    }
+
     pub async fn retrieve_additional_info(&self) {
         info!("Connecting to device with MAC={}", self.mac_address);
 

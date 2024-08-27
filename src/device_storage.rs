@@ -39,8 +39,9 @@ impl DeviceStorage {
         self.devices.get(&id)
     }
 
-    pub fn list_devices(&self) -> Vec<&BluetoothDevice> {
+    pub fn list_devices(&self) -> Vec<(u32, &BluetoothDevice)> {
         debug!("Listing all devices...");
-        self.devices.values().collect()
+        // Return a vector of tuples containing the internal ID and a reference to the device
+        self.devices.iter().map(|(&id, device)| (id, device)).collect()
     }
 }

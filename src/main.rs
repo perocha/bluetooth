@@ -37,10 +37,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             3 => {
                 let device_id = ui.get_device_id();
-                info!("User requested to retrieve information for device ID: {}", device_id);
-                bluetooth_manager.retrieve_device_info(device_id, &device_storage).await?;
+                info!("User requested to retrieve config information for device ID: {}", device_id);
+                bluetooth_manager.list_available_info(device_id, &device_storage).await?;
             }
             4 => {
+                let device_id = ui.get_device_id();
+                info!("User requested to retrieve detailed information for device ID: {}", device_id);
+                bluetooth_manager.retrieve_device_info(device_id, &device_storage).await?;
+            }
+            5 => {
                 info!("User selected exit. Terminating the application...");
                 break;
             }
