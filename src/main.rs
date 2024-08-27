@@ -24,8 +24,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         println!("Found devices:");
         for (i, device) in devices.iter().enumerate() {
-            println!("{}: {}", i + 1, device.name);
+            println!("{}: {} - Address: {}, Signal Strength: {} dBm", 
+                i + 1, 
+                device.name, 
+                device.address, 
+                device.signal_strength.map_or("N/A".to_string(), |rssi| rssi.to_string()));
         }
+
 
         let selected_device = get_user_selection(&devices)?;
         manager.pair_with_device(selected_device).await?;
