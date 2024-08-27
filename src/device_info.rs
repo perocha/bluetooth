@@ -2,7 +2,6 @@ use btleplug::platform::Peripheral;
 use btleplug::api::{Peripheral as PeripheralTrait, CharPropFlags};
 use log::{info, warn, debug};
 use std::sync::Arc;
-use tokio_stream::StreamExt;
 
 #[derive(Debug, Clone)]
 pub struct BluetoothDevice {
@@ -116,89 +115,74 @@ impl BluetoothDevice {
         Ok(())
     }
 
-    pub async fn retrieve_temperature_and_humidity(&self) -> Result<(f32, f32), Box<dyn std::error::Error>> {
+    pub async fn subscribe_to_mj_ht_v1_notifications(&self) -> Result<(), Box<dyn std::error::Error>> {
         let max_retries = 3;
         let mut attempt = 0;
     
         while attempt < max_retries {
             attempt += 1;
-            match self.connect().await {
-                Ok(_) => break,
+    
+            // Ensure the device is connected
+            if !self.peripheral.is_connected().await? {
+                self.connect().await?;
+            }
+    
+            // Introduce a small delay to ensure the device is ready
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    
+            // Subscribe to temperature notifications
+            let temperature_uuid = "226caa55-6476-4566-7562-66734470666d";
+            let service_uuid = "226c0000-6476-4566-7562-66734470666d";
+    
+            match self.subscribe_to_notifications(service_uuid, temperature_uuid).await {
+                Ok(_) => {
+                    info!("Successfully subscribed to temperature notifications.");
+                }
                 Err(e) => {
-                    warn!("Attempt {}/{}: Failed to connect to device {}: {:?}", attempt, max_retries, self.mac_address, e);
+                    warn!("Attempt {}/{}: Failed to subscribe to temperature notifications: {:?}", attempt, max_retries, e);
                     if attempt == max_retries {
                         return Err(Box::new(std::io::Error::new(
-                            std::io::ErrorKind::NotConnected,
-                            format!("Failed to connect to device {} after {} attempts: {}", self.mac_address, max_retries, e),
+                            std::io::ErrorKind::Other,
+                            format!("Failed to subscribe after {} attempts: {}", max_retries, e),
                         )));
                     }
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    continue; // Retry subscription
+                }
+            }
+    
+            // Subscribe to humidity notifications
+            let humidity_uuid = "226cbb55-6476-4566-7562-66734470666d";
+    
+            match self.subscribe_to_notifications(service_uuid, humidity_uuid).await {
+                Ok(_) => {
+                    info!("Successfully subscribed to humidity notifications.");
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!("Attempt {}/{}: Failed to subscribe to humidity notifications: {:?}", attempt, max_retries, e);
+                    if attempt == max_retries {
+                        return Err(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!("Failed to subscribe after {} attempts: {}", max_retries, e),
+                        )));
+                    }
                 }
             }
         }
     
-        let service_uuid = "226c0000-6476-4566-7562-66734470666d";
-        let temperature_uuid = "226caa55-6476-4566-7562-66734470666d";
-        let humidity_uuid = "226cbb55-6476-4566-7562-66734470666d";
-    
-        // Adding delay to ensure device is ready
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    
-        // Attempt to subscribe to the temperature notifications
-        if let Err(e) = self.subscribe_to_notifications(service_uuid, temperature_uuid).await {
-            self.disconnect().await?;
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to subscribe to temperature notifications: {}", e),
-            )));
-        }
-    
-        // Attempt to subscribe to the humidity notifications
-        if let Err(e) = self.subscribe_to_notifications(service_uuid, humidity_uuid).await {
-            self.disconnect().await?;
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to subscribe to humidity notifications: {}", e),
-            )));
-        }
-    
-        // Wait for notifications and process them
-        let mut temperature: Option<f32> = None;
-        let mut humidity: Option<f32> = None;
-        let mut notification_stream = self.peripheral.notifications().await?;
-    
-        while let Some(notification) = notification_stream.next().await {
-            if notification.uuid.to_string() == temperature_uuid {
-                temperature = Some(Self::parse_temperature(&notification.value));
-            } else if notification.uuid.to_string() == humidity_uuid {
-                humidity = Some(Self::parse_humidity(&notification.value));
-            }
-    
-            // Exit the loop once both values are received
-            if temperature.is_some() && humidity.is_some() {
-                break;
-            }
-        }
-    
-        self.disconnect().await?;
-    
-        if let (Some(temp), Some(hum)) = (temperature, humidity) {
-            Ok((temp, hum))
-        } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Failed to retrieve temperature and humidity from notifications",
-            )))
-        }
+        Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to subscribe to notifications after multiple attempts",
+        )))
     }
-    
+
     async fn subscribe_to_notifications(&self, service_uuid: &str, characteristic_uuid: &str) -> Result<(), Box<dyn std::error::Error>> {
         let characteristic = self.find_characteristic(service_uuid, characteristic_uuid).ok_or_else(|| {
             let error_msg = format!("Characteristic with UUID {} not found in service {}", characteristic_uuid, service_uuid);
             warn!("{}", error_msg);
             std::io::Error::new(std::io::ErrorKind::NotFound, error_msg)
         })?;
-    
+
         self.peripheral.subscribe(&characteristic).await.map_err(|e| {
             warn!("Failed to subscribe to characteristic with UUID {}: {:?}", characteristic_uuid, e);
             Box::new(e) as Box<dyn std::error::Error>

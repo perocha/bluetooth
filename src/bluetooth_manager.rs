@@ -53,12 +53,11 @@ impl BluetoothManager {
             Ok(())
         }).await
     }
-    
+
     pub async fn retrieve_temperature_and_humidity(&self, device_id: u32, storage: &DeviceStorage) -> Result<(), Box<dyn std::error::Error>> {
         self.with_device(device_id, storage, |device| async move {
-            info!("Retrieving temperature and humidity...");
-            let (temp, hum) = device.retrieve_temperature_and_humidity().await?;
-            info!("Temperature: {:.2}°C, Humidity: {:.2}%", temp, hum);
+            info!("Subscribing to temperature and humidity notifications...");
+            device.subscribe_to_mj_ht_v1_notifications().await?;
             Ok(())
         }).await
     }
