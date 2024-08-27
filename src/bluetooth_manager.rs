@@ -70,4 +70,16 @@ impl BluetoothManager {
         Ok(())
     }
 
+    pub async fn retrieve_temperature_and_humidity(&self, device_id: u32, storage: &DeviceStorage) -> Result<(), Box<dyn Error>> {
+        info!("Retrieving temperature and humidity data from MJ_HT_V1 sensor...");
+        if let Some(device) = storage.get_device(device_id) {
+            info!("Device found: {:?}", device);
+            device.retrieve_temperature_and_humidity().await?;
+        } else {
+            info!("Device with ID {} not found.", device_id);
+        }
+
+        Ok(())
+    }
+
 }

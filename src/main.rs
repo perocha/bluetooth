@@ -46,6 +46,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 bluetooth_manager.retrieve_device_info(device_id, &device_storage).await?;
             }
             5 => {
+                let device_id = ui.get_device_id();
+                info!("Get temperature and humidity data from MJ_HT_V1 sensor with device ID: {}", device_id);
+                bluetooth_manager.retrieve_temperature_and_humidity(device_id, &device_storage).await?;
+                break;
+            }
+            6 => {
                 info!("User selected exit. Terminating the application...");
                 break;
             }
