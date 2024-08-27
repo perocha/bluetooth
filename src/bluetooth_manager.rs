@@ -1,4 +1,4 @@
-use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
+use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter, CharPropFlags};
 use btleplug::platform::{Adapter, Manager};
 use tokio::time::{self, Duration};
 use std::error::Error;
@@ -33,57 +33,93 @@ impl BluetoothManager {
             info!("Found {} peripherals on attempt {}", peripherals.len(), attempt);
 
             for peripheral in peripherals {
-                // Skip if this peripheral is already added to the list
                 if all_devices.iter().any(|d: &BluetoothDevice| d.id == peripheral.id()) {
-                    continue;
+                    continue; // Skip already discovered devices
                 }
 
                 let properties = peripheral.properties().await?;
-                let name = if let Some(props) = &properties {
-                    props.local_name.clone()
-                } else {
-                    None
-                };
+                let name = properties.as_ref().and_then(|props| props.local_name.clone());
+                
+                let device_name = name.unwrap_or_else(|| "Unknown Device".to_string());
+                let address = peripheral.id().to_string();
+                let signal_strength = properties.as_ref().and_then(|props| props.rssi);
 
-                let device_name = match name {
-                    Some(name) => name,
-                    None => {
-                        info!("Attempting to connect to peripheral {:?} to retrieve name...", peripheral.id());
-                        if peripheral.connect().await.is_ok() {
-                            peripheral.discover_services().await.ok();
-                            let updated_properties = peripheral.properties().await?;
-                            peripheral.disconnect().await.ok();
+                info!("Discovered device: {} ({:?})", device_name, peripheral.id());
+                all_devices.push(BluetoothDevice::new(peripheral.id(), device_name, address, signal_strength));
+            }
+        }
 
-                            if let Some(props) = updated_properties {
-                                props.local_name.unwrap_or("Unknown Device".to_string())
-                            } else {
-                                "Unknown Device".to_string()
-                            }
-                        } else {
-                            warn!("Failed to connect to peripheral {:?}", peripheral.id());
-                            "Unknown Device".to_string()
+        // Once the scan is complete, gather more info for MJ_HT_V1 devices
+        for device in &all_devices {
+            if device.name == "MJ_HT_V1" {
+                match self.adapter.peripheral(&device.id).await {
+                    Ok(peripheral) => {
+                        if let Err(err) = self.retrieve_device_info(&peripheral).await {
+                            warn!("Failed to retrieve additional information for {}: {:?}", device.name, err);
                         }
                     }
-                };
-
-                // Only add devices with the name "MJ_HT_V1"
-                if device_name == "MJ_HT_V1" {
-                    let address = peripheral.id().to_string();
-                    let signal_strength = properties.and_then(|props| props.rssi); // Assuming rssi is available
-
-                    info!("Discovered device: {} ({:?})", device_name, peripheral.id());
-                    all_devices.push(BluetoothDevice::new(peripheral.id(), device_name, address, signal_strength));
+                    Err(err) => {
+                        warn!("Peripheral not found for device: {:?}, error: {:?}", device.id, err);
+                    }
                 }
             }
         }
 
         if all_devices.is_empty() {
-            info!("No devices named 'MJ_HT_V1' found.");
+            info!("No devices found.");
         } else {
-            info!("Total devices named 'MJ_HT_V1' found: {}", all_devices.len());
+            info!("Total devices found: {}", all_devices.len());
         }
 
         Ok(all_devices)
+    }
+
+    async fn retrieve_device_info(&self, peripheral: &impl Peripheral) -> Result<(), Box<dyn Error>> {
+        info!("Attempting to connect to peripheral {:?} to retrieve information...", peripheral.id());
+
+        let mut attempts = 0;
+        let max_attempts = 3;
+        loop {
+            match peripheral.connect().await {
+                Ok(_) => break,
+                Err(e) if attempts < max_attempts => {
+                    attempts += 1;
+                    warn!("Failed to connect (attempt {}): {:?}", attempts, e);
+                    time::sleep(Duration::from_secs(1)).await;
+                }
+                Err(e) => {
+                    return Err(format!("Failed to connect after {} attempts: {:?}", max_attempts, e).into());
+                }
+            }
+        }
+
+        peripheral.discover_services().await?;
+
+        let services = peripheral.services();
+        for service in services {
+            info!("Service UUID: {:?}", service.uuid);
+
+            for characteristic in service.characteristics {
+                info!("Characteristic UUID: {:?}", characteristic.uuid);
+
+                if characteristic.properties.contains(CharPropFlags::READ) {
+                    match peripheral.read(&characteristic).await {
+                        Ok(value) => {
+                            info!("Read value: {:?}", value);
+                            // Parse and use the value as needed
+                        }
+                        Err(err) => {
+                            warn!("Failed to read characteristic {:?}: {:?}", characteristic.uuid, err);
+                        }
+                    }
+                }
+            }
+        }
+
+        peripheral.disconnect().await?;
+        info!("Disconnected from peripheral {:?}", peripheral.id());
+
+        Ok(())
     }
 
     pub async fn pair_with_device(&self, device: &BluetoothDevice) -> Result<(), Box<dyn Error>> {
