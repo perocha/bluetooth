@@ -3,7 +3,7 @@ use btleplug::api::{Peripheral as PeripheralTrait, CharPropFlags};
 use log::{info, warn, debug};
 use std::sync::Arc;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BluetoothDevice {
     pub mac_address: String,
     pub name: String,
@@ -27,14 +27,14 @@ impl BluetoothDevice {
 
         if let Err(e) = self.peripheral.connect().await {
             warn!("Failed to connect to device {}: {:?}", self.mac_address, e);
-            return Err(Box::new(e));
+            return Err(Box::new(e)); // Box the error before returning
         }
 
         info!("Connected to device with MAC={}", self.mac_address);
 
         if let Err(e) = self.peripheral.discover_services().await {
             warn!("Failed to discover services on device {}: {:?}", self.mac_address, e);
-            return Err(Box::new(e));
+            return Err(Box::new(e)); // Box the error before returning
         }
 
         for service in self.peripheral.services() {
@@ -95,78 +95,104 @@ impl BluetoothDevice {
         }
     }
 
-    /// Retrieve temperature and humidity from an MJ_HT_V1 device
-    pub async fn retrieve_temperature_and_humidity(&self) -> Result<(f32, f32), Box<dyn std::error::Error>> {
-        info!("Connecting to MJ_HT_V1 device with MAC={}", self.mac_address);
-
+    pub async fn connect(&self) -> Result<(), Box<dyn std::error::Error>> {
+        info!("Connecting to device with MAC={}", self.mac_address);
         if let Err(e) = self.peripheral.connect().await {
             warn!("Failed to connect to device {}: {:?}", self.mac_address, e);
-            return Err(Box::new(e));
+            return Err(Box::new(e)); // Box the error before returning
         }
-
         info!("Connected to device with MAC={}", self.mac_address);
+        Ok(())
+    }
 
-        if let Err(e) = self.peripheral.discover_services().await {
-            warn!("Failed to discover services on device {}: {:?}", self.mac_address, e);
-            return Err(Box::new(e));
-        }
-
-        let mut temperature = None;
-        let mut humidity = None;
-
-        for service in self.peripheral.services() {
-            for characteristic in &service.characteristics {
-                if characteristic.properties.contains(CharPropFlags::READ) {
-                    let uuid = characteristic.uuid.to_string();
-                    
-                    // Example UUIDs, these need to be replaced with the actual UUIDs for temperature and humidity
-                    if uuid == "00002A6E-0000-1000-8000-00805F9B34FB" { // Replace with actual UUID for temperature
-                        match self.peripheral.read(characteristic).await {
-                            Ok(value) => {
-                                // Convert the value to a temperature reading
-                                temperature = Some(Self::parse_temperature(&value));
-                            }
-                            Err(err) => {
-                                warn!("Failed to read temperature characteristic: {:?}", err);
-                            }
-                        }
-                    } else if uuid == "00002A6F-0000-1000-8000-00805F9B34FB" { // Replace with actual UUID for humidity
-                        match self.peripheral.read(characteristic).await {
-                            Ok(value) => {
-                                // Convert the value to a humidity reading
-                                humidity = Some(Self::parse_humidity(&value));
-                            }
-                            Err(err) => {
-                                warn!("Failed to read humidity characteristic: {:?}", err);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
+    pub async fn disconnect(&self) -> Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = self.peripheral.disconnect().await {
             warn!("Failed to disconnect from device {}: {:?}", self.mac_address, e);
+            return Err(Box::new(e)); // Box the error before returning
         } else {
             info!("Disconnected from device with MAC={}", self.mac_address);
         }
+        Ok(())
+    }
 
-        if let (Some(temp), Some(hum)) = (temperature, humidity) {
-            Ok((temp, hum))
-        } else {
-            Err("Failed to retrieve temperature and humidity".into())
+    pub async fn retrieve_temperature_and_humidity(&self) -> Result<(f32, f32), Box<dyn std::error::Error>> {
+        if let Err(e) = self.connect().await {
+            warn!("Failed to connect to device {}: {:?}", self.mac_address, e);
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::NotConnected,
+                format!("Failed to connect to device {}: {}", self.mac_address, e),
+            )));
+        }
+    
+        let temperature_uuid = "00000002-0000-1000-8000-00805f9b34fb";
+        let humidity_uuid = "00000004-0000-1000-8000-00805f9b34fb";
+    
+        // Attempt to read the temperature characteristic
+        let temperature = match self.read_characteristic(temperature_uuid).await {
+            Ok(value) => value,
+            Err(e) => {
+                self.disconnect().await?;
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to retrieve temperature: {}", e),
+                )));
+            }
+        };
+    
+        // Attempt to read the humidity characteristic
+        let humidity = match self.read_characteristic(humidity_uuid).await {
+            Ok(value) => value,
+            Err(e) => {
+                self.disconnect().await?;
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to retrieve humidity: {}", e),
+                )));
+            }
+        };
+    
+        let temp_value = Self::parse_temperature(&temperature);
+        let hum_value = Self::parse_humidity(&humidity);
+    
+        self.disconnect().await?;
+        
+        Ok((temp_value, hum_value))
+    }
+
+    async fn read_characteristic(&self, uuid: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let characteristic = self.find_characteristic(uuid).ok_or_else(|| {
+            let error_msg = format!("Characteristic with UUID {} not found", uuid);
+            warn!("{}", error_msg);
+            std::io::Error::new(std::io::ErrorKind::NotFound, error_msg)
+        })?;
+
+        match self.peripheral.read(&characteristic).await {
+            Ok(value) => Ok(value),
+            Err(e) => {
+                warn!("Failed to read characteristic with UUID {}: {:?}", uuid, e);
+                Err(Box::new(e))
+            }
         }
     }
 
+    fn find_characteristic(&self, uuid: &str) -> Option<btleplug::api::Characteristic> {
+        for service in self.peripheral.services() {
+            for characteristic in &service.characteristics {
+                if characteristic.uuid.to_string() == uuid {
+                    return Some(characteristic.clone());
+                }
+            }
+        }
+        None
+    }
+
     fn parse_temperature(value: &[u8]) -> f32 {
-        // Assuming the temperature is in the first two bytes and is little-endian
         let raw_value = i16::from_le_bytes([value[0], value[1]]);
-        raw_value as f32 / 100.0 // Example scaling factor, adjust based on actual data format
+        raw_value as f32 / 100.0
     }
 
     fn parse_humidity(value: &[u8]) -> f32 {
-        // Assuming the humidity is in the first two bytes and is little-endian
         let raw_value = i16::from_le_bytes([value[0], value[1]]);
-        raw_value as f32 / 100.0 // Example scaling factor, adjust based on actual data format
+        raw_value as f32 / 100.0
     }
 }

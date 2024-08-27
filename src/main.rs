@@ -6,7 +6,7 @@ mod device_info;
 use bluetooth_manager::BluetoothManager;
 use device_storage::DeviceStorage;
 use ui::UserInterface;
-use log::{info, debug};  // Import the logging macros
+use log::{info, debug, error};  // Import the logging macros
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -29,7 +29,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             1 => {
                 let attempts = ui.get_scan_attempts();
                 info!("User requested a scan with {} attempt(s)", attempts);
-                bluetooth_manager.scan(&mut device_storage, attempts).await?;
+                if let Err(e) = bluetooth_manager.scan(&mut device_storage, attempts).await {
+                    error!("Failed to perform scan: {}", e);
+                }
             }
             2 => {
                 info!("User requested to list devices");
@@ -38,18 +40,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             3 => {
                 let device_id = ui.get_device_id();
                 info!("User requested to retrieve config information for device ID: {}", device_id);
-                bluetooth_manager.list_available_info(device_id, &device_storage).await?;
+                if let Err(e) = bluetooth_manager.list_available_info(device_id, &device_storage).await {
+                    error!("Failed to retrieve available information: {}", e);
+                }
             }
             4 => {
                 let device_id = ui.get_device_id();
                 info!("User requested to retrieve detailed information for device ID: {}", device_id);
-                bluetooth_manager.retrieve_device_info(device_id, &device_storage).await?;
+                if let Err(e) = bluetooth_manager.retrieve_device_info(device_id, &device_storage).await {
+                    error!("Failed to retrieve device information: {}", e);
+                }
             }
             5 => {
                 let device_id = ui.get_device_id();
                 info!("Get temperature and humidity data from MJ_HT_V1 sensor with device ID: {}", device_id);
-                bluetooth_manager.retrieve_temperature_and_humidity(device_id, &device_storage).await?;
-                break;
+                if let Err(e) = bluetooth_manager.retrieve_temperature_and_humidity(device_id, &device_storage).await {
+                    error!("Failed to retrieve temperature and humidity: {}", e);
+                } else {
+                    info!("Successfully retrieved temperature and humidity.");
+                }
             }
             6 => {
                 info!("User selected exit. Terminating the application...");
