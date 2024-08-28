@@ -29,7 +29,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             1 => {
                 let attempts = ui.get_scan_attempts();
                 info!("User requested a scan with {} attempt(s)", attempts);
-                if let Err(e) = bluetooth_manager.scan(&mut device_storage, attempts).await {
+                let duration = ui.get_scan_duration();
+                info!("User requested a scan with a duration of {} seconds", duration);
+                if let Err(e) = bluetooth_manager.scan(&mut device_storage, duration, attempts).await {
                     error!("Failed to perform scan: {}", e);
                 }
             }
@@ -73,7 +75,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     info!("Successfully retrieved all data.");
                 }
             }
+            8 => {
+                let device_id = ui.get_device_id();
+                info!("User requested to connect to device ID: {}", device_id);
+                if let Err(e) = bluetooth_manager.connect_device(device_id, &device_storage).await {
+                    error!("Failed to connect to device: {}", e);
+                }
+            }
+            9 => {
+                let device_id = ui.get_device_id();
+                info!("User requested to disconnect from device ID: {}", device_id);
+                if let Err(e) = bluetooth_manager.disconnect_device(device_id, &device_storage).await {
+                    error!("Failed to disconnect from device: {}", e);
+                }
+            }
             10 => {
+                let device_id = ui.get_device_id();
+                let service_uuid = ui.get_service_uuid()?.to_string();
+                let characteristic_uuid = ui.get_characteristic_uuid()?.to_string();
+                info!("User requested to read characteristic {} from service {} of device ID: {}", characteristic_uuid, service_uuid, device_id);
+
+                // Connect to the device before reading the characteristic
+                if let Err(e) = bluetooth_manager.connect_device(device_id, &device_storage).await {
+                    error!("Failed to connect to device: {}", e);
+                    continue;
+                }
+                // Read the characteristic
+                if let Err(e) = bluetooth_manager.read_characteristic(device_id, &device_storage, &service_uuid, &characteristic_uuid).await {
+                    error!("Failed to read characteristic: {}", e);
+                }
+                // Disconnect from the device after reading the characteristic
+                if let Err(e) = bluetooth_manager.disconnect_device(device_id, &device_storage).await {
+                    error!("Failed to disconnect from device: {}", e);
+                }
+            }
+            20 => {
                 info!("User selected exit. Terminating the application...");
                 break;
             }

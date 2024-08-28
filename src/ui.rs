@@ -15,7 +15,10 @@ impl UserInterface {
         println!("5. Retrieve detailed info");
         println!("6. Retrieve temperature and humidity data");
         println!("7. Retrieve all data");
-        println!("10. Exit");
+        println!("8. Connect to device");
+        println!("9. Disconnect from device");
+        println!("10. Read characteristic");
+        println!("20. Exit");
     }
 
     pub fn get_user_choice(&self) -> u8 {
@@ -26,6 +29,13 @@ impl UserInterface {
 
     pub fn get_scan_attempts(&self) -> u8 {
         println!("Enter the number of scan attempts:");
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).expect("Failed to read line");
+        input.trim().parse().expect("Please enter a valid number")
+    }
+
+    pub fn get_scan_duration(&self) -> u8 {
+        println!("Enter the scan duration in seconds:");
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).expect("Failed to read line");
         input.trim().parse().expect("Please enter a valid number")
@@ -49,5 +59,21 @@ impl UserInterface {
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).expect("Failed to read line");
         input.trim().parse().expect("Please enter a valid number")
+    }
+
+    // Adjusted method to return a Result<String, std::io::Error>
+    pub fn get_service_uuid(&self) -> Result<String, std::io::Error> {
+        println!("Enter the service UUID:");
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        Ok(input.trim().to_string())
+    }
+    
+    // This method is already correctly returning a String, but adjust for error handling
+    pub fn get_characteristic_uuid(&self) -> Result<String, std::io::Error> {
+        println!("Enter the characteristic UUID:");
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        Ok(input.trim().to_string())
     }
 }

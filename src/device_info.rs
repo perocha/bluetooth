@@ -129,7 +129,7 @@ impl BluetoothDevice {
     
             // Introduce a longer delay to ensure the device is ready
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-    
+
             // Subscribe to temperature notifications
             let temperature_uuid = "226caa55-6476-4566-7562-66734470666d";
             let service_uuid = "226c0000-6476-4566-7562-66734470666d";
@@ -183,10 +183,36 @@ impl BluetoothDevice {
             std::io::Error::new(std::io::ErrorKind::NotFound, error_msg)
         })?;
     
-        self.peripheral.subscribe(&characteristic).await.map_err(|e| {
-            warn!("Failed to subscribe to characteristic with UUID {}: {:?}", characteristic_uuid, e);
-            Box::new(e) as Box<dyn std::error::Error>
-        })
+        // Check if the characteristic has the Notify property
+        if !characteristic.properties.contains(CharPropFlags::NOTIFY) {
+            let error_msg = format!("Characteristic with UUID {} does not support notifications", characteristic_uuid);
+            warn!("{}", error_msg);
+            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, error_msg)));
+        }
+    
+        for attempt in 1..=3 {
+            if !self.peripheral.is_connected().await? {
+                info!("Connecting to device...");
+                self.peripheral.connect().await?;
+            }
+    
+            match self.peripheral.subscribe(&characteristic).await {
+                Ok(_) => {
+                    info!("Successfully subscribed to characteristic with UUID {}", characteristic_uuid);
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!("Attempt {}/3: Failed to subscribe to characteristic with UUID {}: {:?}", attempt, characteristic_uuid, e);
+                    if attempt < 3 {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    } else {
+                        return Err(Box::new(e));
+                    }
+                }
+            }
+        }
+    
+        Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to subscribe after 3 attempts")))
     }
     
     fn find_characteristic(&self, service_uuid: &str, characteristic_uuid: &str) -> Option<btleplug::api::Characteristic> {
@@ -202,7 +228,7 @@ impl BluetoothDevice {
         None
     }
     
-    async fn read_characteristic(&self, service_uuid: &str, characteristic_uuid: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub async fn read_characteristic(&self, service_uuid: &str, characteristic_uuid: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let characteristic = self.find_characteristic(service_uuid, characteristic_uuid).ok_or_else(|| {
             let error_msg = format!("Characteristic with UUID {} not found", characteristic_uuid);
             warn!("{}", error_msg);
@@ -245,8 +271,6 @@ impl BluetoothDevice {
             ("Firmware Version", "0000180a-0000-1000-8000-00805f9b34fb", "00002a26-0000-1000-8000-00805f9b34fb"),
             ("Manufacturer Name", "0000180a-0000-1000-8000-00805f9b34fb", "00002a29-0000-1000-8000-00805f9b34fb"),
             ("Battery Level", "0000180f-0000-1000-8000-00805f9b34fb", "00002a19-0000-1000-8000-00805f9b34fb"),
-            ("Custom Service Temperature", "226c0000-6476-4566-7562-66734470666d", "226caa55-6476-4566-7562-66734470666d"),
-            ("Custom Service Humidity", "226c0000-6476-4566-7562-66734470666d", "226cbb55-6476-4566-7562-66734470666d"),
         ];
 
         for (name, service_uuid, characteristic_uuid) in characteristics {
@@ -261,12 +285,6 @@ impl BluetoothDevice {
                         }
                         "Battery Level" => {
                             format!("{}%", value[0])
-                        }
-                        "Custom Service Temperature" => {
-                            format!("{:.2}°C", Self::parse_temperature(&value))
-                        }
-                        "Custom Service Humidity" => {
-                            format!("{:.2}%", Self::parse_humidity(&value))
                         }
                         _ => format!("{:?}", value),
                     };

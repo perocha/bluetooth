@@ -20,12 +20,12 @@ impl BluetoothManager {
         Ok(BluetoothManager { adapter })
     }
 
-    pub async fn scan(&self, storage: &mut DeviceStorage, attempts: u8) -> Result<(), Box<dyn Error>> {
-        info!("Starting scan with {} attempt(s)...", attempts);
+    pub async fn scan(&self, storage: &mut DeviceStorage, duration: u8, attempts: u8) -> Result<(), Box<dyn Error>> {
+        info!("Starting scans of {} seconds with {} attempt(s)...", duration, attempts);
         for attempt in 1..=attempts {
             info!("Scan attempt {}/{}", attempt, attempts);
             self.adapter.start_scan(ScanFilter::default()).await?;
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(duration as u64)).await;
             let peripherals = self.adapter.peripherals().await?;
 
             for peripheral in peripherals {
@@ -69,7 +69,34 @@ impl BluetoothManager {
             Ok(())
         }).await
     }
-    
+
+    // Connect with a device
+    pub async fn connect_device(&self, device_id: u32, storage: &DeviceStorage) -> Result<(), Box<dyn std::error::Error>> {
+        self.with_device(device_id, storage, |device| async move {
+            info!("Connecting to device...");
+            device.connect().await?;
+            Ok(())
+        }).await
+    }
+
+    // Disconnect from a device
+    pub async fn disconnect_device(&self, device_id: u32, storage: &DeviceStorage) -> Result<(), Box<dyn std::error::Error>> {
+        self.with_device(device_id, storage, |device| async move {
+            info!("Disconnecting from device...");
+            device.disconnect().await?;
+            Ok(())
+        }).await
+    }
+
+    // Read characteristic value
+    pub async fn read_characteristic(&self, device_id: u32, storage: &DeviceStorage, service_uuid: &str, characteristic_uuid: &str) -> Result<(), Box<dyn std::error::Error>> {
+        self.with_device(device_id, storage, |device| async move {
+            info!("Reading characteristic value...");
+            device.read_characteristic(service_uuid, characteristic_uuid).await?;
+            Ok(())
+        }).await
+    }
+
     /// Helper method to reduce code duplication when working with devices.
     async fn with_device<F, Fut>(
         &self,
@@ -87,7 +114,7 @@ impl BluetoothManager {
             Err("Device not found".into())
         }
     }
-    
+
     /// Helper method to create a BluetoothDevice from a peripheral.
     async fn create_bluetooth_device(&self, peripheral: btleplug::platform::Peripheral) -> Option<BluetoothDevice> {
         let properties = peripheral.properties().await.ok()?;
