@@ -9,12 +9,13 @@ impl UserInterface {
 
     pub fn display_menu(&self) {
         println!("1. Scan");
-        println!("2. List Devices");
-        println!("3. Retrieve config info");
-        println!("4. Retrieve detailed info");
-        println!("5. Retrieve temperature and humidity data");
-        println!("6. Retrieve all data");
-        println!("7. Exit");
+        println!("2. List devices");
+        println!("3. List MJ_HT_V1 devices");
+        println!("4. Retrieve config info");
+        println!("5. Retrieve detailed info");
+        println!("6. Retrieve temperature and humidity data");
+        println!("7. Retrieve all data");
+        println!("10. Exit");
     }
 
     pub fn get_user_choice(&self) -> u8 {
@@ -32,6 +33,13 @@ impl UserInterface {
 
     pub fn display_devices(&self, storage: &DeviceStorage) {
         for (id, device) in storage.list_devices() {
+            println!("ID: {}, MAC: {}, Name: {}, RSSI: {}", id, device.mac_address, device.name, device.rssi);
+        }
+    }
+
+    // Display only MJ_HT_V1 devices
+    pub fn display_mj_ht_v1_devices(&self, storage: &DeviceStorage) {
+        for (id, device) in storage.list_mj_ht_v1_devices() {
             println!("ID: {}, MAC: {}, Name: {}, RSSI: {}", id, device.mac_address, device.name, device.rssi);
         }
     }

@@ -38,20 +38,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ui.display_devices(&device_storage);
             }
             3 => {
+                info!("User requested to list MJ_HT_V1 devices");
+                ui.display_mj_ht_v1_devices(&device_storage);
+            }
+            4 => {
                 let device_id = ui.get_device_id();
                 info!("User requested to retrieve config information for device ID: {}", device_id);
                 if let Err(e) = bluetooth_manager.list_available_info(device_id, &device_storage).await {
                     error!("Failed to retrieve available information: {}", e);
                 }
             }
-            4 => {
+            5 => {
                 let device_id = ui.get_device_id();
                 info!("User requested to retrieve detailed information for device ID: {}", device_id);
                 if let Err(e) = bluetooth_manager.retrieve_device_info(device_id, &device_storage).await {
                     error!("Failed to retrieve device information: {}", e);
                 }
             }
-            5 => {
+            6 => {
                 let device_id = ui.get_device_id();
                 info!("Get temperature and humidity data from MJ_HT_V1 sensor with device ID: {}", device_id);
                 if let Err(e) = bluetooth_manager.retrieve_temperature_and_humidity(device_id, &device_storage).await {
@@ -60,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     info!("Successfully retrieved temperature and humidity.");
                 }
             }
-            6 => {
+            7 => {
                 let device_id = ui.get_device_id();
                 info!("Get all data from MJ_HT_V1 sensor with device ID: {}", device_id);
                 if let Err(e) = bluetooth_manager.read_mj_ht_v1_information(device_id, &device_storage).await {
@@ -69,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     info!("Successfully retrieved all data.");
                 }
             }
-            7 => {
+            10 => {
                 info!("User selected exit. Terminating the application...");
                 break;
             }

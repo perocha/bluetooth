@@ -127,8 +127,8 @@ impl BluetoothDevice {
                 self.connect().await?;
             }
     
-            // Introduce a small delay to ensure the device is ready
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            // Introduce a longer delay to ensure the device is ready
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     
             // Subscribe to temperature notifications
             let temperature_uuid = "226caa55-6476-4566-7562-66734470666d";
@@ -175,14 +175,14 @@ impl BluetoothDevice {
             "Failed to subscribe to notifications after multiple attempts",
         )))
     }
-
+    
     async fn subscribe_to_notifications(&self, service_uuid: &str, characteristic_uuid: &str) -> Result<(), Box<dyn std::error::Error>> {
         let characteristic = self.find_characteristic(service_uuid, characteristic_uuid).ok_or_else(|| {
             let error_msg = format!("Characteristic with UUID {} not found in service {}", characteristic_uuid, service_uuid);
             warn!("{}", error_msg);
             std::io::Error::new(std::io::ErrorKind::NotFound, error_msg)
         })?;
-
+    
         self.peripheral.subscribe(&characteristic).await.map_err(|e| {
             warn!("Failed to subscribe to characteristic with UUID {}: {:?}", characteristic_uuid, e);
             Box::new(e) as Box<dyn std::error::Error>

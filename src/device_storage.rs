@@ -44,4 +44,14 @@ impl DeviceStorage {
         // Return a vector of tuples containing the internal ID and a reference to the device
         self.devices.iter().map(|(&id, device)| (id, device)).collect()
     }
+
+    /// Lists only devices that are MJ_HT_V1 sensors.
+    pub fn list_mj_ht_v1_devices(&self) -> Vec<(u32, &BluetoothDevice)> {
+        debug!("Listing all MJ_HT_V1 devices...");
+        // Filter the devices where the name or other criteria match MJ_HT_V1 sensors.
+        self.devices.iter()
+            .filter(|(_, device)| device.name.contains("MJ_HT_V1"))
+            .map(|(&id, device)| (id, device))
+            .collect()
+    }
 }
