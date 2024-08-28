@@ -54,4 +54,9 @@ impl DeviceStorage {
             .map(|(&id, device)| (id, device))
             .collect()
     }
+
+    // Count the number of devices with a specific name
+    pub fn count_devices_by_name(&self, name: &str) -> usize {
+        self.devices.values().filter(|d| d.name == name).count()
+    }
 }

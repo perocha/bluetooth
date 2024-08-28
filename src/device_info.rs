@@ -23,13 +23,8 @@ impl BluetoothDevice {
     }
 
     pub async fn list_available_info(&self) -> Result<(), Box<dyn std::error::Error>> {
-        info!("Connecting to device with MAC={}", self.mac_address);
-    
-        if let Err(e) = self.peripheral.connect().await {
-            warn!("Failed to connect to device {}: {:?}", self.mac_address, e);
-            return Err(Box::new(e));
-        }
-    
+        self.connect().await?;
+
         info!("Connected to device with MAC={}", self.mac_address);
     
         if let Err(e) = self.peripheral.discover_services().await {
@@ -45,36 +40,26 @@ impl BluetoothDevice {
             }
         }
     
-        if let Err(e) = self.peripheral.disconnect().await {
-            warn!("Failed to disconnect from device {}: {:?}", self.mac_address, e);
-        } else {
-            info!("Disconnected from device with MAC={}", self.mac_address);
-        }
-    
+        self.disconnect().await?;
         Ok(())
     }
 
-    pub async fn retrieve_additional_info(&self) {
-        info!("Connecting to device with MAC={}", self.mac_address);
-
-        if let Err(e) = self.peripheral.connect().await {
-            warn!("Failed to connect to device {}: {:?}", self.mac_address, e);
-            return;
-        }
+    pub async fn retrieve_additional_info(&self) -> Result<(), Box<dyn std::error::Error>> {
+        self.connect().await?;
 
         info!("Connected to device with MAC={}", self.mac_address);
-
+    
         if let Err(e) = self.peripheral.discover_services().await {
             warn!("Failed to discover services on device {}: {:?}", self.mac_address, e);
-            return;
+            return Err(Box::new(e));
         }
-
+    
         for service in self.peripheral.services() {
             info!("Service UUID: {:?}", service.uuid);
-
+    
             for characteristic in service.characteristics {
                 info!("Characteristic UUID: {:?}", characteristic.uuid);
-
+    
                 if characteristic.properties.contains(CharPropFlags::READ) {
                     match self.peripheral.read(&characteristic).await {
                         Ok(value) => {
@@ -87,12 +72,9 @@ impl BluetoothDevice {
                 }
             }
         }
-
-        if let Err(e) = self.peripheral.disconnect().await {
-            warn!("Failed to disconnect from device {}: {:?}", self.mac_address, e);
-        } else {
-            info!("Disconnected from device with MAC={}", self.mac_address);
-        }
+    
+        self.disconnect().await?;
+        Ok(())
     }
 
     pub async fn connect(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -257,13 +239,11 @@ impl BluetoothDevice {
     pub async fn read_mj_ht_v1_information(&self) -> Result<(), Box<dyn std::error::Error>> {
         self.connect().await?;
 
-        // Force service discovery
         if let Err(e) = self.peripheral.discover_services().await {
             warn!("Failed to discover services: {:?}", e);
             return Err(Box::new(e));
         }
 
-        // Define the characteristics we are aware of
         let characteristics = vec![
             ("Device Name", "00001800-0000-1000-8000-00805f9b34fb", "00002a00-0000-1000-8000-00805f9b34fb"),
             ("Appearance", "00001800-0000-1000-8000-00805f9b34fb", "00002a01-0000-1000-8000-00805f9b34fb"),

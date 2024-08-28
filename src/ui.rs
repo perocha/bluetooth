@@ -9,15 +9,16 @@ impl UserInterface {
 
     pub fn display_menu(&self) {
         println!("1. Scan");
-        println!("2. List devices");
-        println!("3. List MJ_HT_V1 devices");
-        println!("4. Retrieve config info");
-        println!("5. Retrieve detailed info");
-        println!("6. Retrieve temperature and humidity data");
-        println!("7. Retrieve all data");
-        println!("8. Connect to device");
-        println!("9. Disconnect from device");
-        println!("10. Read characteristic");
+        println!("2. Scan for MJ_HT_V1 devices");
+        println!("3. List devices");
+        println!("4. List MJ_HT_V1 devices");
+        println!("5. Retrieve config info");
+        println!("6. Retrieve detailed info");
+        println!("7. Retrieve temperature and humidity data");
+        println!("8. Retrieve all data");
+        println!("9. Connect to device");
+        println!("10. Disconnect from device");
+        println!("11. Read characteristic");
         println!("20. Exit");
     }
 
@@ -36,6 +37,13 @@ impl UserInterface {
 
     pub fn get_scan_duration(&self) -> u8 {
         println!("Enter the scan duration in seconds:");
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).expect("Failed to read line");
+        input.trim().parse().expect("Please enter a valid number")
+    }
+
+    pub fn get_max_devices_to_scan(&self) -> u8 {
+        println!("Enter the maximum number of MJ_HT_V1 devices to scan for:");
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).expect("Failed to read line");
         input.trim().parse().expect("Please enter a valid number")

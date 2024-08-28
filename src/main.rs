@@ -28,36 +28,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match choice {
             1 => {
                 let attempts = ui.get_scan_attempts();
-                info!("User requested a scan with {} attempt(s)", attempts);
                 let duration = ui.get_scan_duration();
-                info!("User requested a scan with a duration of {} seconds", duration);
+                info!("User requested a scan with {} attempt(s) and a duration of {} seconds", attempts, duration);
                 if let Err(e) = bluetooth_manager.scan(&mut device_storage, duration, attempts).await {
                     error!("Failed to perform scan: {}", e);
                 }
             }
             2 => {
+                let max_devices = ui.get_max_devices_to_scan();
+                info!("User requested to scan for MJ_HT_V1 devices");
+                if let Err(e) = bluetooth_manager.scan_for_mj_ht_v1_devices(&mut device_storage, max_devices).await {
+                    error!("Failed to scan for MJ_HT_V1 devices: {}", e);
+                }
+            }
+            3 => {
                 info!("User requested to list devices");
                 ui.display_devices(&device_storage);
             }
-            3 => {
+            4 => {
                 info!("User requested to list MJ_HT_V1 devices");
                 ui.display_mj_ht_v1_devices(&device_storage);
             }
-            4 => {
+            5 => {
                 let device_id = ui.get_device_id();
                 info!("User requested to retrieve config information for device ID: {}", device_id);
                 if let Err(e) = bluetooth_manager.list_available_info(device_id, &device_storage).await {
                     error!("Failed to retrieve available information: {}", e);
                 }
             }
-            5 => {
+            6 => {
                 let device_id = ui.get_device_id();
                 info!("User requested to retrieve detailed information for device ID: {}", device_id);
                 if let Err(e) = bluetooth_manager.retrieve_device_info(device_id, &device_storage).await {
                     error!("Failed to retrieve device information: {}", e);
                 }
             }
-            6 => {
+            7 => {
                 let device_id = ui.get_device_id();
                 info!("Get temperature and humidity data from MJ_HT_V1 sensor with device ID: {}", device_id);
                 if let Err(e) = bluetooth_manager.retrieve_temperature_and_humidity(device_id, &device_storage).await {
@@ -66,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     info!("Successfully retrieved temperature and humidity.");
                 }
             }
-            7 => {
+            8 => {
                 let device_id = ui.get_device_id();
                 info!("Get all data from MJ_HT_V1 sensor with device ID: {}", device_id);
                 if let Err(e) = bluetooth_manager.read_mj_ht_v1_information(device_id, &device_storage).await {
@@ -75,24 +81,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     info!("Successfully retrieved all data.");
                 }
             }
-            8 => {
+            9 => {
                 let device_id = ui.get_device_id();
                 info!("User requested to connect to device ID: {}", device_id);
                 if let Err(e) = bluetooth_manager.connect_device(device_id, &device_storage).await {
                     error!("Failed to connect to device: {}", e);
                 }
             }
-            9 => {
+            10 => {
                 let device_id = ui.get_device_id();
                 info!("User requested to disconnect from device ID: {}", device_id);
                 if let Err(e) = bluetooth_manager.disconnect_device(device_id, &device_storage).await {
                     error!("Failed to disconnect from device: {}", e);
                 }
             }
-            10 => {
+            11 => {
                 let device_id = ui.get_device_id();
-                let service_uuid = ui.get_service_uuid()?.to_string();
-                let characteristic_uuid = ui.get_characteristic_uuid()?.to_string();
+                let mut service_uuid = ui.get_service_uuid()?.to_string();
+                let mut characteristic_uuid = ui.get_characteristic_uuid()?.to_string();
                 info!("User requested to read characteristic {} from service {} of device ID: {}", characteristic_uuid, service_uuid, device_id);
 
                 // Connect to the device before reading the characteristic
@@ -101,6 +107,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     continue;
                 }
                 // Read the characteristic
+                service_uuid = "00001800-0000-1000-8000-00805f9b34fb".to_string();
+                characteristic_uuid = "00002a00-0000-1000-8000-00805f9b34fb".to_string();
                 if let Err(e) = bluetooth_manager.read_characteristic(device_id, &device_storage, &service_uuid, &characteristic_uuid).await {
                     error!("Failed to read characteristic: {}", e);
                 }

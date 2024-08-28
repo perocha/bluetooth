@@ -38,10 +38,44 @@ impl BluetoothManager {
         Ok(())
     }
 
+    pub async fn scan_for_mj_ht_v1_devices(
+        &self,
+        storage: &mut DeviceStorage,
+        max_devices: u8,
+    ) -> Result<(), Box<dyn Error>> {
+        info!("Starting scan for up to {} MJ_HT_V1 devices...", max_devices);
+    
+        // Run scan until the max number of devices is found
+        while storage.count_devices_by_name("MJ_HT_V1") < max_devices as usize {
+            info!("Scanning for MJ_HT_V1 devices...");
+            self.adapter.start_scan(ScanFilter::default()).await?;
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await; // Scan for 5 seconds each iteration
+    
+            let peripherals = self.adapter.peripherals().await?;
+            for peripheral in peripherals {
+                if let Some(device) = self.create_bluetooth_device(peripheral).await {
+                    if device.name == "MJ_HT_V1" {
+                        storage.add_or_update_device(device);
+    
+                        // Check if we reached the maximum number of devices
+                        if storage.count_devices_by_name("MJ_HT_V1") >= max_devices as usize {
+                            info!("Found {} MJ_HT_V1 devices, stopping scan.", max_devices);
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+            info!("Scan iteration completed.");
+        }
+    
+        info!("Scan completed with {} MJ_HT_V1 devices found.", storage.count_devices_by_name("MJ_HT_V1"));
+        Ok(())
+    }
+
     pub async fn retrieve_device_info(&self, device_id: u32, storage: &DeviceStorage) -> Result<(), Box<dyn std::error::Error>> {
         self.with_device(device_id, storage, |device| async move {
             info!("Retrieving detailed information...");
-            device.retrieve_additional_info().await;
+            device.retrieve_additional_info().await?;
             Ok(())
         }).await
     }
