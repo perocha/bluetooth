@@ -1,6 +1,6 @@
 use btleplug::platform::Peripheral;
 use btleplug::api::{Peripheral as PeripheralTrait, CharPropFlags};
-use log::{info, warn, debug};
+use log::{info, warn, debug, error};
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -77,14 +77,19 @@ impl BluetoothDevice {
         Ok(())
     }
 
+    // Helper method to connect with retry logic and exponential backoff
     pub async fn connect(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("Connecting to device with MAC={}", self.mac_address);
-        if let Err(e) = self.peripheral.connect().await {
-            warn!("Failed to connect to device {}: {:?}", self.mac_address, e);
-            return Err(Box::new(e));
+        for attempt in 1..=3 {
+            if self.peripheral.connect().await.is_ok() {
+                info!("Connected to device with MAC={}", self.mac_address);
+                return Ok(());
+            } else {
+                warn!("Attempt {}/3: Failed to connect to device {}", attempt, self.mac_address);
+                tokio::time::sleep(std::time::Duration::from_secs(2_u64.pow(attempt))).await; // Exponential backoff
+            }
         }
-        info!("Connected to device with MAC={}", self.mac_address);
-        Ok(())
+        Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to connect after multiple attempts")))
     }
 
     pub async fn disconnect(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -210,6 +215,7 @@ impl BluetoothDevice {
         None
     }
     
+    // Improved method to read characteristic with retry and delay logic
     pub async fn read_characteristic(&self, service_uuid: &str, characteristic_uuid: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let characteristic = self.find_characteristic(service_uuid, characteristic_uuid).ok_or_else(|| {
             let error_msg = format!("Characteristic with UUID {} not found", characteristic_uuid);
@@ -217,13 +223,38 @@ impl BluetoothDevice {
             std::io::Error::new(std::io::ErrorKind::NotFound, error_msg)
         })?;
 
-        match self.peripheral.read(&characteristic).await {
-            Ok(value) => Ok(value),
-            Err(e) => {
-                warn!("Failed to read characteristic with UUID {}: {:?}", characteristic_uuid, e);
-                Err(Box::new(e))
+        // Add a slight delay before attempting to read
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        for attempt in 1..=3 {
+            if !self.peripheral.is_connected().await? {
+                info!("Not connected to device, reconnecting to device...");
+                let connect_result = self.connect().await;
+                // Log the result of the connect method
+                match &connect_result {
+                    Ok(_) => info!("Successfully connected to the device."),
+                    Err(e) => error!("Failed to connect to the device: {:?}", e),
+                }
+                // Propagate the result of the connect method
+                connect_result?;
+            }
+
+            match self.peripheral.read(&characteristic).await {
+                Ok(value) => {
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await; // Delay between reads
+                    return Ok(value);
+                }
+                Err(e) => {
+                    warn!("Attempt {}/3: Failed to read characteristic with UUID {}: {:?}", attempt, characteristic_uuid, e);
+                    if attempt < 3 {
+                        tokio::time::sleep(std::time::Duration::from_secs(2_u64.pow(attempt))).await; // Exponential backoff
+                    } else {
+                        return Err(Box::new(e));
+                    }
+                }
             }
         }
+        Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to read characteristic after 3 attempts")))
     }
 
     fn parse_temperature(value: &[u8]) -> f32 {
