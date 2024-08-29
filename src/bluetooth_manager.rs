@@ -131,6 +131,24 @@ impl BluetoothManager {
         }).await
     }
 
+    // Discover services and characteristics
+    pub async fn discover_services (&self, device_id: u32, storage: &DeviceStorage) -> Result<(), Box<dyn std::error::Error>> {
+        self.with_device(device_id, storage, |device| async move {
+            info!("Discovering services and characteristics...");
+            device.discover_services().await?;
+            Ok(())
+        }).await
+    }
+
+    // Read MJ_HT_V1 sensor data
+    pub async fn read_mj_ht_v1(&self, device_id: u32, storage: &DeviceStorage) -> Result<(), Box<dyn std::error::Error>> {
+        self.with_device(device_id, storage, |device| async move {
+            info!("Reading MJ_HT_V1 sensor data...");
+            device.read_mj_ht_v1().await?;
+            Ok(())
+        }).await
+    }
+
     /// Helper method to reduce code duplication when working with devices.
     async fn with_device<F, Fut>(
         &self,

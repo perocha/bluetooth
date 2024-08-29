@@ -97,24 +97,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             11 => {
                 let device_id = ui.get_device_id();
-                let mut service_uuid = ui.get_service_uuid()?.to_string();
-                let mut characteristic_uuid = ui.get_characteristic_uuid()?.to_string();
-                info!("User requested to read characteristic {} from service {} of device ID: {}", characteristic_uuid, service_uuid, device_id);
-
-                // Connect to the device before reading the characteristic
-                if let Err(e) = bluetooth_manager.connect_device(device_id, &device_storage).await {
-                    error!("Failed to connect to device: {}", e);
-                    continue;
+                info!("User requested to discover services from device ID: {}", device_id);
+                if let Err(e) = bluetooth_manager.discover_services(device_id, &device_storage).await {
+                    error!("Failed to discover services: {}", e);
                 }
-                // Read the characteristic
-                service_uuid = "00001800-0000-1000-8000-00805f9b34fb".to_string();
-                characteristic_uuid = "00002a00-0000-1000-8000-00805f9b34fb".to_string();
-                if let Err(e) = bluetooth_manager.read_characteristic(device_id, &device_storage, &service_uuid, &characteristic_uuid).await {
-                    error!("Failed to read characteristic: {}", e);
-                }
-                // Disconnect from the device after reading the characteristic
-                if let Err(e) = bluetooth_manager.disconnect_device(device_id, &device_storage).await {
-                    error!("Failed to disconnect from device: {}", e);
+            }
+            12 => {
+                let device_id = ui.get_device_id();
+                info!("User requested to read characteristic from device ID: {}", device_id);
+                if let Err(e) = bluetooth_manager.read_mj_ht_v1(device_id, &device_storage).await {
+                    error!("Failed to read sensor: {}", e);
                 }
             }
             20 => {

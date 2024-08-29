@@ -215,46 +215,21 @@ impl BluetoothDevice {
         None
     }
     
-    // Improved method to read characteristic with retry and delay logic
     pub async fn read_characteristic(&self, service_uuid: &str, characteristic_uuid: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        // Find the characteristic by service and characteristic UUIDs
         let characteristic = self.find_characteristic(service_uuid, characteristic_uuid).ok_or_else(|| {
             let error_msg = format!("Characteristic with UUID {} not found", characteristic_uuid);
             warn!("{}", error_msg);
             std::io::Error::new(std::io::ErrorKind::NotFound, error_msg)
         })?;
-
-        // Add a slight delay before attempting to read
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-        for attempt in 1..=3 {
-            if !self.peripheral.is_connected().await? {
-                info!("Not connected to device, reconnecting to device...");
-                let connect_result = self.connect().await;
-                // Log the result of the connect method
-                match &connect_result {
-                    Ok(_) => info!("Successfully connected to the device."),
-                    Err(e) => error!("Failed to connect to the device: {:?}", e),
-                }
-                // Propagate the result of the connect method
-                connect_result?;
-            }
-
-            match self.peripheral.read(&characteristic).await {
-                Ok(value) => {
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await; // Delay between reads
-                    return Ok(value);
-                }
-                Err(e) => {
-                    warn!("Attempt {}/3: Failed to read characteristic with UUID {}: {:?}", attempt, characteristic_uuid, e);
-                    if attempt < 3 {
-                        tokio::time::sleep(std::time::Duration::from_secs(2_u64.pow(attempt))).await; // Exponential backoff
-                    } else {
-                        return Err(Box::new(e));
-                    }
-                }
-            }
-        }
-        Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to read characteristic after 3 attempts")))
+    
+        // Attempt to read the characteristic value
+        let value = self.peripheral.read(&characteristic).await.map_err(|e| {
+            error!("Failed to read characteristic {}: {:?}", characteristic_uuid, e);
+            e
+        })?;
+    
+        Ok(value)
     }
 
     fn parse_temperature(value: &[u8]) -> f32 {
@@ -310,4 +285,76 @@ impl BluetoothDevice {
         self.disconnect().await?;
         Ok(())
     }
+
+    pub async fn discover_services(&self) -> Result<(), Box<dyn std::error::Error>> {
+        self.connect().await?;
+
+        if let Err(e) = self.peripheral.discover_services().await {
+            warn!("Failed to discover services: {:?}", e);
+            return Err(Box::new(e));
+        }
+
+        for service in self.peripheral.services() {
+            info!("Service UUID: {:?}", service.uuid);
+
+            for characteristic in &service.characteristics {
+                info!("Characteristic UUID: {:?}, Properties: {:?}", characteristic.uuid, characteristic.properties);
+            }
+        }
+
+        self.disconnect().await?;
+        Ok(())
+    }
+
+    pub async fn read_mj_ht_v1(&self) -> Result<(), Box<dyn std::error::Error>> {
+        // Step 1: Connect to the device
+        info!("Connecting to device with MAC={}", self.mac_address);
+        self.peripheral.connect().await.map_err(|e| {
+            error!("Failed to connect to device {}: {:?}", self.mac_address, e);
+            e
+        })?;
+        info!("Connected to device with MAC={}", self.mac_address);
+    
+        // Step 3: Find the "Device Name" characteristic
+        let service_uuid = "00001800-0000-1000-8000-00805f9b34fb";
+        let characteristic_uuid = "00002a00-0000-1000-8000-00805f9b34fb";
+        let characteristic = self
+            .peripheral
+            .services()
+            .iter()
+            .find(|service| service.uuid.to_string() == service_uuid)
+            .and_then(|service| {
+                service
+                    .characteristics
+                    .iter()
+                    .find(|c| c.uuid.to_string() == characteristic_uuid)
+            })
+            .ok_or_else(|| {
+                let error_msg = format!(
+                    "Characteristic with UUID {} not found in service {}",
+                    characteristic_uuid, service_uuid
+                );
+                error!("{}", error_msg);
+                std::io::Error::new(std::io::ErrorKind::NotFound, error_msg)
+            })?
+            .clone();
+    
+        // Step 4: Read the "Device Name" characteristic
+        let value = self.peripheral.read(&characteristic).await.map_err(|e| {
+            error!("Failed to read characteristic {}: {:?}", characteristic_uuid, e);
+            e
+        })?;
+        let device_name = String::from_utf8_lossy(&value).to_string();
+        println!("Device Name: {}", device_name);
+    
+        // Step 5: Disconnect from the device
+        self.peripheral.disconnect().await.map_err(|e| {
+            error!("Failed to disconnect from device {}: {:?}", self.mac_address, e);
+            e
+        })?;
+        info!("Disconnected from device with MAC={}", self.mac_address);
+    
+        Ok(())
+    }
+    
 }

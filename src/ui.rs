@@ -18,7 +18,8 @@ impl UserInterface {
         println!("8. Retrieve all data");
         println!("9. Connect to device");
         println!("10. Disconnect from device");
-        println!("11. Read characteristic");
+        println!("11. Discover services");
+        println!("12. Read characteristic");
         println!("20. Exit");
     }
 
